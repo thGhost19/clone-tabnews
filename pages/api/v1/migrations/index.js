@@ -14,26 +14,28 @@ export default async function migrations(request, response) {
     migrationsTable: "pgmigrations",
   };
 
-  if (request.method === "GET") {
-    const pendingMigrations = await migrateRunner(defaultMigrationOptions);
-    await dbClient.end();
-    return response.status(200).json(pendingMigrations);
-  }
+  try {
+    if (request.method === "GET") {
+      const pendingMigrations = await migrateRunner(defaultMigrationOptions);
+      return response.status(200).json(pendingMigrations);
+    } else if (request.method === "POST") {
+      const migratedMigrations = await migrateRunner({
+        ...defaultMigrationOptions,
+        dryRun: false,
+      });
 
-  if (request.method === "POST") {
-    const migratedMigrations = await migrateRunner({
-      ...defaultMigrationOptions,
-      dryRun: false,
-    });
+      if (migratedMigrations.length > 0) {
+        return response.status(201).json(migratedMigrations);
+      }
 
-    await dbClient.end();
-
-    if (migratedMigrations.length > 0) {
-      return response.status(201).json(migratedMigrations);
+      return response.status(200).json(migratedMigrations);
+    } else {
+      return response.status(405).json({ error: "Method Not Allowed" });
     }
-
-    return response.status(200).json(migratedMigrations);
+  } catch (error) {
+    console.error("Error running migrations:", error);
+    return response.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    await dbClient.end();
   }
-
-  return response.status(405).end(); // Method Not Allowed
 }
